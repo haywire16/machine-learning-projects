@@ -1,0 +1,64 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from keras.models import Sequential
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense
+from keras.preprocessing.image import ImageDataGenerator
+
+# Define the model architecture
+model = Sequential()
+model.add(Conv2D(32, (3, 3), input_shape = (64, 64, 3), activation = 'relu'))
+model.add(MaxPooling2D(pool_size = (2, 2)))
+model.add(Conv2D(64, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D(pool_size = (2, 2)))
+model.add(Conv2D(128, (3, 3), activation = 'relu'))
+model.add(MaxPooling2D(pool_size = (2, 2)))
+model.add(Flatten())
+model.add(Dense(units = 128, activation = 'relu'))
+model.add(Dense(units = 1, activation = 'sigmoid'))
+
+# Compile the model
+model.compile(optimizer = 'adam', loss = 'binary_crossentropy', metrics = ['accuracy'])
+
+# Image data generator for data augmentation
+train_datagen = ImageDataGenerator(rescale = 1./255, shear_range = 0.2, zoom_range = 0.2, horizontal_flip = True)
+test_datagen = ImageDataGenerator(rescale = 1./255)
+
+# Load and prepare the training and test datasets
+training_set = train_datagen.flow_from_directory('training_data', target_size = (64, 64), batch_size = 32, class_mode = 'binary')
+test_set = test_datagen.flow_from_directory('test_data', target_size = (64, 64), batch_size = 32, class_mode = 'binary')
+
+# Train the model
+history = model.fit(training_set, epochs = 20, validation_data = test_set)
+
+# Save the model weights
+model.save_weights('model_weights.h5')
+
+# Create the web application
+from flask import Flask, request, jsonify
+from PIL import Image
+
+app = Flask(__name__)
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    if request.method == 'POST':
+        # Get the image file
+        file = request.files['file']
+        # Load the image and preprocess it
+        img = Image.open(file.stream)
+        img = img.resize((64, 64))
+        img = np.asarray(img)
+        img = img / 255.0
+        img = img.reshape(1, 64, 64, 3)
+        # Make a prediction
+        prediction = model.predict(img)
+        if prediction[0][0] < 0.5:
+            label = 'Cat'
+        else:
+            label = 'Dog'
+        return jsonify({'prediction': label})
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+# Add a contribution guide to the README.md file
